@@ -5,7 +5,7 @@
   var TZ = 'America/Vancouver';
   var VARS = ['temperature_2m', 'precipitation', 'snowfall', 'weather_code', 'wind_gusts_10m', 'visibility', 'is_day', 'precipitation_probability'];
   var HOURS = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-  var DAYS_SHOWN = 4;
+  var STOP_MIN = 30; // total minutes of stops, spread evenly along the drive
   var LVL = { '-1': { cls: 'lx', word: 'No forecast yet' }, 0: { cls: 'l0', word: 'Good' }, 1: { cls: 'l1', word: 'Caution' }, 2: { cls: 'l2', word: 'Bad' } };
 
   function $(id) { return document.getElementById(id); }
@@ -68,7 +68,7 @@
     if (dir === 'E') {
       list = list.reverse().map(function (s) { return { name: s.name, min: r.totalMin - s.min, km: r.totalKm - s.km }; });
     }
-    list.forEach(function (s) { s.min = Math.round(s.min * pace); });
+    list.forEach(function (s) { s.min = Math.round(s.min * pace + STOP_MIN * s.min / r.totalMin); });
     return list;
   }
   function hourIndex(name, hourStr) {
@@ -198,7 +198,7 @@
     $('summary').innerHTML =
       '<span class="big">Leave ' + fmtDay(st.dep.slice(0, 10)) + ' at ' + fmtTime(st.dep + ':00') + '</span>' +
       '<span class="chip ' + LVL[plan.level].cls + '">' + LVL[plan.level].word + '</span>' +
-      '<span>Arrive about ' + fmtTime(last.arrive) + ' (' + Math.floor(driveMin / 60) + ' h ' + (driveMin % 60) + ' min driving, ' + r.totalKm + ' km, no stops counted)</span>' +
+      '<span>Arrive about ' + fmtTime(last.arrive) + ' (' + Math.floor(driveMin / 60) + ' h ' + (driveMin % 60) + ' min driving plus ' + STOP_MIN + ' min of stops, ' + r.totalKm + ' km)</span>' +
       '<span class="status">Other route (' + esc(D.routes[other].label) + ') at the same time: ' + describe(op) + '.</span>';
   }
   function renderMap(plan) {
