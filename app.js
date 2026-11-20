@@ -420,6 +420,11 @@
     if (!this.value) return;
     st.day0 = this.value; st.dep = st.day0 + st.dep.slice(10); render();
   };
+  // Clicking anywhere on the date field opens the calendar, not just the small icon.
+  $('day0').addEventListener('click', function () {
+    if (this.showPicker) { try { this.showPicker(); } catch (e) { /* older browsers fall back to typing */ } }
+  });
+  $('day0').addEventListener('blur', function () { if (!this.value) this.value = st.day0; });
   $('speak').onchange = function () {
     st.speak = this.checked; save('rw_state', st);
     if (st.speak && 'speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance('Spoken changes are on.'));
