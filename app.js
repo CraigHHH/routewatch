@@ -42,6 +42,20 @@
   if (!st.day0 || st.day0 < today) st.day0 = today;
   if (!st.dep || st.dep.slice(0, 10) < st.day0 || st.dep.slice(0, 10) > addDays(st.day0, DAYS_SHOWN - 1)) st.dep = st.day0 + 'T09';
   st.speak = !!st.speak;
+  st.tires = st.tires || 'studded';
+  st.drive = st.drive || 'awd';
+  st.exp = st.exp || 'new';
+  var live = load('rw_live', null); // {updated, stations:{pointName:{...}}}
+  var LIVE_URL = 'https://raw.githubusercontent.com/CraigHHH/routewatch/data/stations.json';
+
+  // Thresholds move with tires and experience. Drivetrain only matters in deep new snow.
+  function profile() {
+    var tire = { studded: 1.15, winter: 1, ms: 0.6, summer: 0.6 }[st.tires];
+    var exp = { 'new': 0.7, ok: 1, expert: 1.3 }[st.exp];
+    var drv = { awd: 1.15, fwd: 1, rwd: 0.85 }[st.drive];
+    var k = tire * exp;
+    return { rateBad: 1.5 * k, deepBad: 6 * k * drv, deepCaution: 1.5 * k };
+  }
   var fc = load('rw_fc', null);     // {fetchedAt, byName:{name:{time:[],...}}}
   var ev = load('rw_ev', null);     // {fetchedAt, events:[]}
   var camsAt = load('rw_cams_at', 0);
@@ -93,12 +107,19 @@
     var level = 0, why = [];
     function flag(l, text) { if (l > level) level = l; why.push(text); }
     var freezingRain = [56, 57, 66, 67].indexOf(o.code) >= 0;
+    var P = profile(), isPass = D.points[name].kind === 'pass', summer = st.tires === 'summer';
+    var mon = +hourStr.slice(5, 7);
+    if (summer && isPass && (mon >= 10 || mon <= 4)) flag(2, 'summer tires are not legal here from October to April');
     if (freezingRain) flag(2, 'freezing rain');
-    if (o.snow >= 1) flag(2, 'heavy snow falling, ' + o.snow.toFixed(1) + ' cm in the hour');
-    else if (o.snow >= 0.1) flag(1, 'snow falling, ' + o.snow.toFixed(1) + ' cm in the hour');
-    if (o.snow6 >= 5) flag(2, o.snow6.toFixed(0) + ' cm of new snow in the 6 hours before');
-    else if (o.snow6 >= 1 && o.snow < 0.1) flag(1, o.snow6.toFixed(1) + ' cm of new snow in the 6 hours before');
-    if (!freezingRain && o.precip6 - o.snow6 * 0.7 > 0.3 && o.temp <= 1 && o.temp >= -4) flag(1, 'wet road near freezing, ice possible');
+    if (o.snow >= P.rateBad) flag(2, 'heavy snow falling, ' + o.snow.toFixed(1) + ' cm in the hour');
+    else if (o.snow >= 0.1) flag(summer ? 2 : 1, 'snow falling, ' + o.snow.toFixed(1) + ' cm in the hour');
+    if (o.snow6 >= P.deepBad) flag(2, o.snow6.toFixed(0) + ' cm of new snow in the 6 hours before');
+    else if (o.snow6 >= P.deepCaution && o.snow < 0.1) flag(1, o.snow6.toFixed(1) + ' cm of new snow in the 6 hours before');
+    if (!freezingRain && o.precip6 - o.snow6 * 0.7 > 0.3 && o.temp <= 1 && o.temp >= -4) flag(summer ? 2 : 1, 'wet road near freezing, ice possible');
+    if (isPass && o.dark && o.snow >= 0.1 && st.exp === 'new') flag(2, 'snow falling in the dark');
+    else if (isPass && o.dark && level >= 1) why.push('you would cross in the dark');
+    var ls = live && live.stations[name];
+    if (ls && o.leadH <= 3 && o.leadH >= -1 && /snow|ice|slush|frost/i.test(ls.pavement || '')) flag(1, 'road station reports pavement is ' + String(ls.pavement).toLowerCase() + ' right now');
     if (o.vis !== null && o.vis !== undefined) {
       if (o.vis < 500) flag(2, 'visibility under 500 m');
       else if (o.vis < 2000) flag(1, 'visibility under 2 km');
@@ -218,6 +239,33 @@
     if (e.dark) bits.push('dark');
     return bits.join(' · ');
   }
+  function liveLine(name) {
+    var s = live && live.stations[name];
+    if (!s) return '';
+    var bits = [];
+    if (s.road !== null && s.road !== undefined) bits.push('road ' + esc(s.road) + '°C');
+    if (s.pavement) bits.push('pavement ' + esc(String(s.pavement).toLowerCase()));
+    if (s.depth) bits.push('snow on ground ' + esc(s.depth));
+    if (s.snowStd) bits.push('new snow ' + esc(s.snowStd));
+    if (s.weather) bits.push(esc(String(s.weather).toLowerCase()));
+    var h = '<div class="live"><b>Road station now</b> (' + esc(s.station) + (s.distKm >= 2 ? ', ' + s.distKm + ' km away' : '') + ', saved ' + fmtStamp(Date.parse(live.updated)) + '): ' + bits.join(' · ') + '.';
+    var hist = s.history || [];
+    for (var i = hist.length - 2; i >= 0; i--) {
+      if (hist[i].pavement !== s.pavement) {
+        h += ' Pavement changed from ' + esc(String(hist[i].pavement).toLowerCase()) + ' to ' + esc(String(s.pavement).toLowerCase()) + ' around ' + fmtStamp(Date.parse(hist[i + 1].t)) + '.';
+        break;
+      }
+    }
+    if (s.forecast && s.forecast[0]) h += '<br><b>Station forecast, ' + esc(s.forecast[0].period) + ':</b> ' + esc(s.forecast[0].text);
+    return h + '</div>';
+  }
+  function renderRules() {
+    var P = profile();
+    $('rules').textContent = 'With your settings, a pass is Bad at ' + P.rateBad.toFixed(1) + ' cm of snow per hour or more, or ' + P.deepBad.toFixed(1) +
+      ' cm of new snow in the 6 hours before' + (st.exp === 'new' ? ', or any snow falling in the dark' : '') +
+      '. Freezing rain and visibility under 500 m are Bad for everyone. Any lighter snow, ' + P.deepCaution.toFixed(1) +
+      ' cm or more in the 6 hours before, a wet road near freezing, gusts of 70 km/h, or visibility under 2 km is Caution.';
+  }
   function renderStops(plan) {
     $('stops').innerHTML = plan.stops.map(function (e) {
       var t = '<div class="t">' + fmtTime(e.arrive) + '<small>' + e.km + ' km</small></div>';
@@ -233,6 +281,7 @@
         '<div class="facts">' + wxLine(e) + '</div>' +
         (e.why.length ? '<div class="why">Why: ' + esc(e.why.join(', ')) + '.</div>' : '') +
         (e.level !== -1 ? '<div class="conf">' + confText(e.leadH) + '</div>' : '') +
+        liveLine(e.name) +
         '<div class="camlink">Tap for highway cams (' + e.pt.cams.length + ')</div></button></div>';
     }).join('');
   }
@@ -278,7 +327,13 @@
     renderStatus();
     renderGrid();
     var plan = evalPlan(st.route, st.dir, st.pace, st.dep);
-    renderSummary(plan); renderMap(plan); renderStops(plan); renderEvents();
+    renderSummary(plan); renderMap(plan); renderStops(plan); renderEvents(); renderRules();
+  }
+  function fetchLive() {
+    return fetch(LIVE_URL, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('stations ' + r.status);
+      return r.json();
+    });
   }
 
   // ---- data ----
@@ -332,7 +387,7 @@
     renderStatus('Updating');
     var before = fc ? levelsOf(evalPlan(st.route, st.dir, st.pace, st.dep)) : null;
     var prevAt = fc && fc.fetchedAt;
-    fetchForecast().then(function (nfc) {
+    fetchLive().then(function (x) { live = x; save('rw_live', live); }).catch(function (e) { console.warn(e); }).then(fetchForecast).then(function (nfc) {
       fc = nfc; idxCache = {}; save('rw_fc', fc);
       if (before) {
         var after = levelsOf(evalPlan(st.route, st.dir, st.pace, st.dep)), diffs = [];
@@ -357,6 +412,10 @@
   $('dir').onchange = function () { st.dir = this.value; render(); };
   $('route').onchange = function () { st.route = this.value; render(); };
   $('pace').onchange = function () { st.pace = +this.value; render(); };
+  ['tires', 'drive', 'exp'].forEach(function (k) {
+    $(k).value = st[k];
+    $(k).onchange = function () { st[k] = this.value; render(); };
+  });
   $('day0').onchange = function () {
     if (!this.value) return;
     st.day0 = this.value; st.dep = st.day0 + st.dep.slice(10); render();

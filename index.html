@@ -76,6 +76,7 @@ svg.map .m{cursor:pointer}
 .pass .facts{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;margin-top:6px}
 .pass .why{font-size:14px;margin-top:6px}
 .pass .conf{font-size:12px;color:var(--muted);margin-top:6px}
+.pass .live{font-size:13px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
 .pass .camlink{font-size:13px;color:var(--accent);margin-top:6px}
 .ev{padding:10px 0;border-top:1px solid var(--line);font-size:14px}
 .ev:first-of-type{border-top:0}
@@ -125,6 +126,30 @@ a{color:var(--accent)}
         <input id="day0" type="date">
       </label>
     </div>
+    <div class="row" style="margin-top:10px">
+      <label class="f">Tires
+        <select id="tires">
+          <option value="studded">Studded winter</option>
+          <option value="winter">Winter (mountain snowflake)</option>
+          <option value="ms">All-season (M+S)</option>
+          <option value="summer">Summer</option>
+        </select>
+      </label>
+      <label class="f">Drive
+        <select id="drive">
+          <option value="awd">AWD or 4WD</option>
+          <option value="fwd">Front-wheel drive</option>
+          <option value="rwd">Rear-wheel drive</option>
+        </select>
+      </label>
+      <label class="f">Winter highway experience
+        <select id="exp">
+          <option value="new">New to it</option>
+          <option value="ok">Comfortable</option>
+          <option value="expert">Very experienced</option>
+        </select>
+      </label>
+    </div>
   </section>
 
   <section class="card">
@@ -136,6 +161,8 @@ a{color:var(--accent)}
       <span><span class="chip l2">B 1</span> bad at 1 place</span>
       <span><span class="chip lx">?</span> no forecast yet</span>
     </div>
+    <p class="hint"><b>Bad</b> means pick another time. <b>Caution</b> means doable, expect slow and tense stretches.</p>
+    <p class="hint" id="rules"></p>
     <p class="hint">Each box is a departure time. It is graded on the forecast at every pass and town for the hour you would get there. Tap a box to see the drive.</p>
   </section>
 
@@ -156,7 +183,7 @@ a{color:var(--accent)}
 
   <section class="card">
     <label class="toggle"><input type="checkbox" id="speak"> Say changes out loud when the forecast for my drive changes (only works while this page is open on screen)</label>
-    <p class="hint">Forecast from Open-Meteo, set to each pass's elevation. Road events and cams from DriveBC. Grades are simple rules on snowfall, ice risk, wind and visibility. They are a planning aid and can be wrong.</p>
+    <p class="hint">Forecast from Open-Meteo, set to each pass's elevation. Road events, cams and road station readings from DriveBC. Station readings are copied every 20 minutes or so. Grades are simple rules on snowfall, ice risk, wind and visibility. They are a planning aid and can be wrong.</p>
   </section>
 </main>
 
