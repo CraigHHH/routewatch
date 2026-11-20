@@ -46,6 +46,7 @@ label.f select,label.f input{background:var(--bg);border:1px solid var(--line);b
 table.grid{border-collapse:separate;border-spacing:4px;width:100%}
 table.grid th{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap;text-align:center}
 table.grid th.day{text-align:left;padding-right:6px}
+table.grid th.day.pref{color:var(--ink);font-weight:700}
 table.grid td{padding:0}
 .cell{width:100%;min-width:40px;height:40px;border-radius:8px;border:2px solid transparent;font-size:13px;font-weight:600;cursor:pointer}
 .cell.sel{border-color:var(--ink)}
@@ -115,14 +116,7 @@ a{color:var(--accent)}
       <label class="f">Route
         <select id="route"></select>
       </label>
-      <label class="f">Driving pace
-        <select id="pace">
-          <option value="0.83">Dry-road pace (about Google Maps)</option>
-          <option value="0.95">Winter pace (15% slower)</option>
-          <option value="1.08">Slow going (30% slower)</option>
-        </select>
-      </label>
-      <label class="f">First possible day
+      <label class="f">Preferred Travel Date
         <input id="day0" type="date">
       </label>
     </div>

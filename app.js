@@ -38,9 +38,9 @@
   var st = load('rw_state', {});
   st.dir = st.dir || 'W';
   st.route = st.route || 'A';
-  st.pace = st.pace || 0.83;
+  st.pace = 0.83; // fixed at about Google Maps pace
   if (!st.day0 || st.day0 < today) st.day0 = today;
-  if (!st.dep || st.dep.slice(0, 10) < st.day0 || st.dep.slice(0, 10) > addDays(st.day0, DAYS_SHOWN - 1)) st.dep = st.day0 + 'T09';
+  if (!st.dep || st.dep.slice(0, 10) < today || st.dep.slice(0, 10) < addDays(st.day0, -1) || st.dep.slice(0, 10) > addDays(st.day0, 1)) st.dep = st.day0 + 'T09';
   st.speak = !!st.speak;
   st.tires = st.tires || 'studded';
   st.drive = st.drive || 'awd';
@@ -160,15 +160,16 @@
     rs.innerHTML = Object.keys(D.routes).map(function (k) {
       return '<option value="' + k + '">' + esc(D.routes[k].label) + '</option>';
     }).join('');
-    rs.value = st.route; $('dir').value = st.dir; $('pace').value = String(st.pace);
+    rs.value = st.route; $('dir').value = st.dir;
     $('day0').value = st.day0; $('day0').min = today; $('day0').max = addDays(today, 15);
     $('speak').checked = st.speak;
   }
   function renderGrid() {
     var h = '<tr><th></th>' + HOURS.map(function (x) { return '<th>' + ((x + 11) % 12 + 1) + (x < 12 ? 'am' : 'pm') + '</th>'; }).join('') + '</tr>';
-    for (var d = 0; d < DAYS_SHOWN; d++) {
+    for (var d = -1; d <= 1; d++) {
       var day = addDays(st.day0, d);
-      h += '<tr><th class="day">' + fmtDay(day) + '</th>';
+      if (day < today) continue;
+      h += '<tr><th class="day' + (d === 0 ? ' pref' : '') + '">' + fmtDay(day) + '</th>';
       HOURS.forEach(function (hr) {
         var dep = day + 'T' + (hr < 10 ? '0' : '') + hr;
         var p = evalPlan(st.route, st.dir, st.pace, dep);
@@ -411,7 +412,6 @@
   // ---- events ----
   $('dir').onchange = function () { st.dir = this.value; render(); };
   $('route').onchange = function () { st.route = this.value; render(); };
-  $('pace').onchange = function () { st.pace = +this.value; render(); };
   ['tires', 'drive', 'exp'].forEach(function (k) {
     $(k).value = st[k];
     $(k).onchange = function () { st[k] = this.value; render(); };
