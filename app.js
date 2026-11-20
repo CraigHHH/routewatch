@@ -121,8 +121,8 @@
     var ls = live && live.stations[name];
     if (ls && o.leadH <= 3 && o.leadH >= -1 && /snow|ice|slush|frost/i.test(ls.pavement || '')) flag(1, 'road station reports pavement is ' + String(ls.pavement).toLowerCase() + ' right now');
     if (o.vis !== null && o.vis !== undefined) {
-      if (o.vis < 500) flag(2, 'visibility under 500 m');
-      else if (o.vis < 2000) flag(1, 'visibility under 2 km');
+      // Modeled visibility is noisy, so it can raise a Caution but never a Bad on its own.
+      if (o.vis < 500) flag(1, 'fog or low cloud possible, modeled visibility under 500 m');
     } else if (o.code === 45 || o.code === 48) flag(1, 'fog');
     if (o.gust >= 70) flag(1, 'wind gusts ' + Math.round(o.gust) + ' km/h');
     o.level = level; o.why = why;
@@ -231,7 +231,7 @@
     if (e.level === -1) return 'No forecast for this time yet.';
     var bits = [Math.round(e.temp) + '°C'];
     if (e.snow >= 0.1) bits.push('snow ' + e.snow.toFixed(1) + ' cm/h');
-    else if (e.precip >= 0.1) bits.push('rain ' + e.precip.toFixed(1) + ' mm/h');
+    else if (e.precip >= 0.1) bits.push((e.temp <= 1 ? 'light mixed precipitation ' : 'rain ') + e.precip.toFixed(1) + ' mm/h');
     else bits.push('dry');
     if (e.snow6 >= 0.1) bits.push(e.snow6.toFixed(1) + ' cm new snow in prior 6 h');
     if (e.gust !== null && e.gust !== undefined) bits.push('gusts ' + Math.round(e.gust) + ' km/h');
@@ -263,8 +263,8 @@
     var P = profile();
     $('rules').textContent = 'With your settings, a pass is Bad at ' + P.rateBad.toFixed(1) + ' cm of snow per hour or more, or ' + P.deepBad.toFixed(1) +
       ' cm of new snow in the 6 hours before' + (st.exp === 'new' ? ', or any snow falling in the dark' : '') +
-      '. Freezing rain and visibility under 500 m are Bad for everyone. Any lighter snow, ' + P.deepCaution.toFixed(1) +
-      ' cm or more in the 6 hours before, a wet road near freezing, gusts of 70 km/h, or visibility under 2 km is Caution.';
+      '. Freezing rain is Bad for everyone. Any lighter snow, ' + P.deepCaution.toFixed(1) +
+      ' cm or more in the 6 hours before, a wet road near freezing, gusts of 70 km/h, or modeled visibility under 500 m is Caution.';
   }
   function renderStops(plan) {
     $('stops').innerHTML = plan.stops.map(function (e) {
@@ -444,6 +444,6 @@
 
   renderControls();
   render();
-  if (!fc || Date.now() - fc.fetchedAt > 10 * 6e4) refresh(false);
+  if (!fc || !live || Date.now() - fc.fetchedAt > 10 * 6e4) refresh(false);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn(e); });
 })();
