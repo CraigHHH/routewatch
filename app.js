@@ -115,15 +115,15 @@
     else if (o.snow >= 0.1) flag(summer ? 2 : 1, 'snow falling, ' + o.snow.toFixed(1) + ' cm in the hour');
     if (o.snow6 >= P.deepBad) flag(2, o.snow6.toFixed(0) + ' cm of new snow in the 6 hours before');
     else if (o.snow6 >= P.deepCaution && o.snow < 0.1) flag(1, o.snow6.toFixed(1) + ' cm of new snow in the 6 hours before');
-    if (!freezingRain && o.precip6 - o.snow6 * 0.7 > 0.3 && o.temp <= 1 && o.temp >= -4) flag(summer ? 2 : 1, 'wet road near freezing, ice possible');
+    var ls = live && live.stations[name];
+    var nearNow = o.leadH <= 3 && o.leadH >= -1;
+    // A dry reading from the road station beats a forecast-based ice guess when the drive is close.
+    var obsDry = ls && nearNow && /dry/i.test(ls.pavement || '');
+    if (!freezingRain && !obsDry && o.precip6 - o.snow6 * 0.7 >= 1 && o.temp <= 0.5 && o.temp >= -4) flag(summer ? 2 : 1, 'wet road at or below freezing, ice possible');
     if (isPass && o.dark && o.snow >= 0.1 && st.exp === 'new') flag(2, 'snow falling in the dark');
     else if (isPass && o.dark && level >= 1) why.push('you would cross in the dark');
-    var ls = live && live.stations[name];
-    if (ls && o.leadH <= 3 && o.leadH >= -1 && /snow|ice|slush|frost/i.test(ls.pavement || '')) flag(1, 'road station reports pavement is ' + String(ls.pavement).toLowerCase() + ' right now');
-    if (o.vis !== null && o.vis !== undefined) {
-      // Modeled visibility is noisy, so it can raise a Caution but never a Bad on its own.
-      if (o.vis < 500) flag(1, 'fog or low cloud possible, modeled visibility under 500 m');
-    } else if (o.code === 45 || o.code === 48) flag(1, 'fog');
+    if (ls && nearNow && /snow|ice|slush|frost/i.test(ls.pavement || '')) flag(1, 'road station reports pavement is ' + String(ls.pavement).toLowerCase() + ' right now');
+    // Modeled visibility is too noisy to grade on. It is shown on the card but does not change the grade.
     if (o.gust >= 70) flag(1, 'wind gusts ' + Math.round(o.gust) + ' km/h');
     o.level = level; o.why = why;
     return o;
@@ -265,7 +265,7 @@
     $('rules').textContent = 'With your settings, a pass is Bad at ' + P.rateBad.toFixed(1) + ' cm of snow per hour or more, or ' + P.deepBad.toFixed(1) +
       ' cm of new snow in the 6 hours before' + (st.exp === 'new' ? ', or any snow falling in the dark' : '') +
       '. Freezing rain is Bad for everyone. Any lighter snow, ' + P.deepCaution.toFixed(1) +
-      ' cm or more in the 6 hours before, a wet road near freezing, gusts of 70 km/h, or modeled visibility under 500 m is Caution.';
+      ' cm or more in the 6 hours before, a wet road at or below freezing, or gusts of 70 km/h is Caution. Modeled fog is shown but does not change the grade. Within 3 hours of the drive, a dry reading from the road station cancels the ice rule.';
   }
   function renderStops(plan) {
     $('stops').innerHTML = plan.stops.map(function (e) {
@@ -379,7 +379,7 @@
       if (res.some(Boolean)) { camsAt = Date.now(); save('rw_cams_at', camsAt); }
     });
   }
-  function levelsOf(plan) { var m = {}; plan.stops.forEach(function (e) { m[e.name] = e.level; }); return m; }
+  function levelsOf(plan) { var m = {}; plan.stops.forEach(function (e) { m[e.name] = { level: e.level, why: e.why, arrive: e.arrive }; }); return m; }
   var busy = false;
   function refresh(manual) {
     if (busy) return;
@@ -392,8 +392,12 @@
       fc = nfc; idxCache = {}; save('rw_fc', fc);
       if (before) {
         var after = levelsOf(evalPlan(st.route, st.dir, st.pace, st.dep)), diffs = [];
+        var nowS = nowStr();
+        function say(x) { return LVL[x.level].word + (x.why.length ? ' (' + x.why.join(', ') + ')' : ''); }
         Object.keys(after).forEach(function (n) {
-          if (before[n] !== after[n] && before[n] !== -1 && after[n] !== -1) diffs.push(n + ' went from ' + LVL[before[n]].word + ' to ' + LVL[after[n]].word);
+          var b = before[n], a = after[n];
+          if (!b || a.arrive <= nowS) return; // no alerts for places you would already have passed
+          if (b.level !== a.level && b.level !== -1 && a.level !== -1) diffs.push(n + ' went from ' + say(b) + ' to ' + say(a));
         });
         if (diffs.length) announce(diffs, prevAt);
       }
