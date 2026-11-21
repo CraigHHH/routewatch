@@ -1,0 +1,12 @@
+name = "routewatch-stations"
+main = "index.js"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+[triggers]
+crons = ["5 * * * *"]
+
+# The id is filled in when the storage space is created (wrangler kv namespace create LOG).
+[[kv_namespaces]]
+binding = "LOG"
+id = "9f98e33ecc5643ef940a25b1578c7a0b"
