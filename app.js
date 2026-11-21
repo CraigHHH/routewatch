@@ -46,7 +46,7 @@
   st.drive = st.drive || 'awd';
   st.exp = st.exp || 'new';
   var live = load('rw_live', null); // {updated, stations:{pointName:{...}}}
-  var LIVE_URL = 'https://raw.githubusercontent.com/CraigHHH/routewatch/data/stations.json';
+  var LIVE_URL = 'https://routewatch-stations.routewatcher.workers.dev/stations';
 
   // Thresholds move with tires and experience. Drivetrain only matters in deep new snow.
   function profile() {
@@ -251,9 +251,10 @@
     if (s.weather) bits.push(esc(String(s.weather).toLowerCase()));
     var h = '<div class="live"><b>Road station now</b> (' + esc(s.station) + (s.distKm >= 2 ? ', ' + s.distKm + ' km away' : '') + ', saved ' + fmtStamp(Date.parse(live.updated)) + '): ' + bits.join(' · ') + '.';
     var hist = s.history || [];
-    for (var i = hist.length - 2; i >= 0; i--) {
+    for (var i = hist.length - 1; i >= 0; i--) {
       if (hist[i].pavement !== s.pavement) {
-        h += ' Pavement changed from ' + esc(String(hist[i].pavement).toLowerCase()) + ' to ' + esc(String(s.pavement).toLowerCase()) + ' around ' + fmtStamp(Date.parse(hist[i + 1].t)) + '.';
+        var when = hist[i + 1] ? hist[i + 1].t : live.updated;
+        h += ' Pavement changed from ' + esc(String(hist[i].pavement).toLowerCase()) + ' to ' + esc(String(s.pavement).toLowerCase()) + ' around ' + fmtStamp(Date.parse(when)) + '.';
         break;
       }
     }

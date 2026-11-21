@@ -82,7 +82,7 @@ async function runLog(env) {
     const st = await nearestStations();
     const key = 'obs/' + day;
     const cur = JSON.parse((await env.LOG.get(key)) || '{}');
-    cur[hh] = {};
+    cur[hh] = { _at: new Date().toISOString() };
     for (const p of PASSES) {
       const s = st[p.name];
       if (s) cur[hh][p.name] = { station: s.station, distKm: s.distKm, air: s.air, road: s.road, pavement: s.pavement, snow: s.snow, snowStd: s.snowStd, depth: s.depth, precip: s.precip, weather: s.weather, vis: s.vis };
@@ -113,7 +113,23 @@ export default {
       const hit = await cache.match(key);
       if (hit) return hit;
       try {
-        const out = json({ updated: new Date().toISOString(), stations: await nearestStations() }, 200, 'public, max-age=300');
+        const stations = await nearestStations();
+        // Attach the last two days of hourly readings so the app can say when the pavement status changed.
+        const today = localNow().day;
+        const yest = new Date(Date.now() - 86400000).toLocaleString('sv-SE', { timeZone: TZ }).slice(0, 10);
+        for (const d of [yest, today]) {
+          const obs = JSON.parse((await env.LOG.get('obs/' + d)) || '{}');
+          for (const hh of Object.keys(obs).sort()) {
+            const at = obs[hh]._at;
+            if (!at) continue;
+            for (const name of Object.keys(obs[hh])) {
+              if (name === '_at' || !stations[name]) continue;
+              const o = obs[hh][name];
+              (stations[name].history = stations[name].history || []).push({ t: at, pavement: o.pavement, road: o.road, depth: o.depth, snowStd: o.snowStd });
+            }
+          }
+        }
+        const out = json({ updated: new Date().toISOString(), stations }, 200, 'public, max-age=300');
         ctx.waitUntil(cache.put(key, out.clone()));
         return out;
       } catch (e) { return json({ error: e.message }, 502); }
