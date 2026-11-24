@@ -3,6 +3,7 @@
 // 2. Hourly job  Keeps a log for checking the app's grades against what really happened:
 //      obs/<day>           what each pass's road station reported, hour by hour
 //      fc/<day>            the raw hourly forecast for each pass as issued that morning (grades are recomputed from this later)
+//      fct/<day>           the same for the towns (Nelson and the rest), so road notes made in town can be checked
 //      cam/<day>/<hh>/<id> highway cam snapshots every 2 hours from 6 am to 8 pm
 // 3. /log/days, /log/day/<day>, /cam/...  Read the log back for reports.
 const POINTS = [["Nelson", 49.4928, -117.2948], ["Castlegar", 49.2889, -117.6619], ["Paulson Summit", 49.2416, -118.053], ["Christina Lake", 49.1007, -118.2226], ["Eholt Summit", 49.1452, -118.5346], ["Rock Creek", 49.0573, -118.9995], ["Anarchist Summit", 49.0051, -119.3147], ["Osoyoos", 49.0323, -119.4682], ["Keremeos", 49.2054, -119.8414], ["Princeton", 49.4526, -120.5254], ["Sunday Summit", 49.2394, -120.5623], ["Allison Pass", 49.116, -120.867], ["Hope", 49.3616, -121.3636], ["Vancouver", 49.2609, -123.1139], ["McCulloch (Hwy 33)", 49.7577, -119.1261], ["Kelowna", 49.8625, -119.4906], ["Pennask Summit", 49.9093, -120.0242], ["Merritt", 50.1113, -120.7862], ["Coquihalla Summit", 49.5948, -121.0819]];
@@ -68,6 +69,22 @@ async function saveForecast(env, day, hour, done) {
       done.fc = true;
     }
   } catch (e) { done.errors.push('fc: ' + e.message); }
+  try { // the same forecast for the towns on the routes, saved once a day under its own key
+    if (!(await env.LOG.get('fct/' + day))) {
+      const names = PASSES.map(p => p.name);
+      const towns = POINTS.filter(p => names.indexOf(p[0]) < 0);
+      const q = 'latitude=' + towns.map(p => p[1]).join(',') + '&longitude=' + towns.map(p => p[2]).join(',') +
+        '&hourly=' + FC_VARS + '&forecast_days=7&timezone=' + encodeURIComponent(TZ);
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?' + q);
+      if (!res.ok) throw new Error('Open-Meteo returned ' + res.status);
+      let j = await res.json();
+      if (!Array.isArray(j)) j = [j];
+      const out = {};
+      towns.forEach((p, i) => { out[p[0]] = j[i].hourly; });
+      await env.LOG.put('fct/' + day, JSON.stringify({ issuedAt: new Date().toISOString(), issuedLocalHour: hour, towns: out }));
+      done.fcTowns = true;
+    }
+  } catch (e) { done.errors.push('fct: ' + e.message); }
 }
 
 async function runLog(env) {
@@ -141,8 +158,8 @@ export default {
     }
     let m = path.match(/^\/log\/day\/(\d{4}-\d{2}-\d{2})$/);
     if (m) {
-      const [obs, fc, cams] = await Promise.all([env.LOG.get('obs/' + m[1]), env.LOG.get('fc/' + m[1]), env.LOG.list({ prefix: 'cam/' + m[1] + '/' })]);
-      return json({ day: m[1], passes: PASSES, obs: obs ? JSON.parse(obs) : null, fc: fc ? JSON.parse(fc) : null, cams: cams.keys.map(k => ({ key: k.name, pass: k.metadata && k.metadata.pass })) });
+      const [obs, fc, fct, cams] = await Promise.all([env.LOG.get('obs/' + m[1]), env.LOG.get('fc/' + m[1]), env.LOG.get('fct/' + m[1]), env.LOG.list({ prefix: 'cam/' + m[1] + '/' })]);
+      return json({ day: m[1], passes: PASSES, obs: obs ? JSON.parse(obs) : null, fc: fc ? JSON.parse(fc) : null, fcTowns: fct ? JSON.parse(fct) : null, cams: cams.keys.map(k => ({ key: k.name, pass: k.metadata && k.metadata.pass })) });
     }
     m = path.match(/^\/(cam\/\d{4}-\d{2}-\d{2}\/\d{2}\/\d+\.jpg)$/);
     if (m) {
