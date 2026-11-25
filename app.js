@@ -215,15 +215,48 @@
     var s = '<svg class="map" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Route map with passes">' +
       '<path d="' + path(other) + '" fill="none" stroke="var(--line)" stroke-width="4" stroke-linecap="round"/>' +
       '<path d="' + path(st.route) + '" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>';
-    var up = true;
+    // Label placement: each pass label tries above, below, right, left of its dot and takes
+    // the first spot that does not cover another dot or another label.
+    var TOWNS = ['Nelson', 'Vancouver', 'Hope', 'Osoyoos', 'Kelowna', 'Princeton', 'Merritt'];
+    var boxes = [], items = [];
+    function hit(r, q) { return r.x1 < q.x2 && r.x2 > q.x1 && r.y1 < q.y2 && r.y2 > q.y1; }
     plan.stops.forEach(function (e) {
-      var x = X(e.pt.lon), y = Y(e.pt.lat);
-      if (e.pt.kind === 'pass') {
+      var x = +X(e.pt.lon), y = +Y(e.pt.lat), isPass = e.pt.kind === 'pass';
+      if (!isPass && TOWNS.indexOf(e.name) < 0) return;
+      var it = { e: e, x: x, y: y, pass: isPass, r: isPass ? 13 : 5 };
+      items.push(it);
+      boxes.push({ x1: x - it.r, x2: x + it.r, y1: y - it.r, y2: y + it.r, of: it });
+    });
+    items.forEach(function (it) { // town labels sit under their dot
+      if (it.pass) return;
+      var w = it.e.name.length * 6.2;
+      boxes.push({ x1: it.x - w / 2, x2: it.x + w / 2, y1: it.y + 7, y2: it.y + 21, of: it });
+    });
+    items.forEach(function (it) {
+      if (!it.pass) return;
+      it.label = it.e.name.replace(' (Hwy 33)', '');
+      var w = it.label.length * 7.4, x = it.x, y = it.y;
+      var cands = [
+        { tx: x, ty: y - 17, anchor: 'middle', x1: x - w / 2, x2: x + w / 2, y1: y - 30, y2: y - 14 },
+        { tx: x, ty: y + 28, anchor: 'middle', x1: x - w / 2, x2: x + w / 2, y1: y + 14, y2: y + 31 },
+        { tx: x + 17, ty: y + 5, anchor: 'start', x1: x + 15, x2: x + 17 + w, y1: y - 8, y2: y + 9 },
+        { tx: x - 17, ty: y + 5, anchor: 'end', x1: x - 17 - w, x2: x - 15, y1: y - 8, y2: y + 9 }
+      ];
+      var best = null, bestN = 1e9;
+      cands.forEach(function (c) {
+        var n = (c.x1 < 2 || c.x2 > W - 2 || c.y1 < 2 || c.y2 > H - 2) ? 3 : 0;
+        boxes.forEach(function (q) { if (q.of !== it && hit(c, q)) n++; });
+        if (n < bestN) { bestN = n; best = c; }
+      });
+      it.at = best; best.of = it; boxes.push(best);
+    });
+    items.forEach(function (it) {
+      var e = it.e, x = it.x.toFixed(1), y = it.y.toFixed(1);
+      if (it.pass) {
         s += '<g class="m" data-pass="' + esc(e.name) + '"><circle cx="' + x + '" cy="' + y + '" r="11" fill="' + colors[e.level] + '" stroke="var(--card)" stroke-width="3"/>' +
-          '<text x="' + x + '" y="' + (+y + (up ? -17 : 28)) + '" text-anchor="middle">' + esc(e.name.replace(' (Hwy 33)', '')) + '</text></g>';
-        up = !up;
-      } else if (['Nelson', 'Vancouver', 'Hope', 'Osoyoos', 'Kelowna', 'Princeton', 'Merritt'].indexOf(e.name) >= 0) {
-        s += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="var(--ink)"/><text class="town" x="' + x + '" y="' + (+y + 18) + '" text-anchor="middle">' + esc(e.name) + '</text>';
+          '<text x="' + it.at.tx.toFixed(1) + '" y="' + it.at.ty.toFixed(1) + '" text-anchor="' + it.at.anchor + '">' + esc(it.label) + '</text></g>';
+      } else {
+        s += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="var(--ink)"/><text class="town" x="' + x + '" y="' + (it.y + 18).toFixed(1) + '" text-anchor="middle">' + esc(e.name) + '</text>';
       }
     });
     $('mapwrap').innerHTML = s + '</svg>';
